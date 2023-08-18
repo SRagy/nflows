@@ -76,7 +76,8 @@ class CouplingTransform(Transform):
 
         if inputs.shape[1] != self.features:
             raise ValueError(
-                "Expected features = {}, got {}.".format(self.features, inputs.shape[1])
+                "Expected features = {}, got {}.".format(
+                    self.features, inputs.shape[1])
             )
 
         identity_split = inputs[:, self.identity_features, ...]
@@ -105,7 +106,8 @@ class CouplingTransform(Transform):
 
         if inputs.shape[1] != self.features:
             raise ValueError(
-                "Expected features = {}, got {}.".format(self.features, inputs.shape[1])
+                "Expected features = {}, got {}.".format(
+                    self.features, inputs.shape[1])
             )
 
         identity_split = inputs[:, self.identity_features, ...]
@@ -157,6 +159,7 @@ class UMNNCouplingTransform(CouplingTransform):
         but requires more memory.
 
     """
+
     def __init__(
         self,
         mask,
@@ -169,7 +172,8 @@ class UMNNCouplingTransform(CouplingTransform):
     ):
 
         if apply_unconditional_transform:
-            unconditional_transform = lambda features: MonotonicNormalizer(integrand_net_layers, 0, nb_steps, solver)
+            def unconditional_transform(features): return MonotonicNormalizer(
+                integrand_net_layers, 0, nb_steps, solver)
         else:
             unconditional_transform = None
         self.cond_size = cond_size
@@ -179,32 +183,39 @@ class UMNNCouplingTransform(CouplingTransform):
             unconditional_transform=unconditional_transform,
         )
 
-        self.transformer = MonotonicNormalizer(integrand_net_layers, cond_size, nb_steps, solver)
+        self.transformer = MonotonicNormalizer(
+            integrand_net_layers, cond_size, nb_steps, solver)
 
     def _transform_dim_multiplier(self):
         return self.cond_size
 
     def _coupling_transform_forward(self, inputs, transform_params):
         if len(inputs.shape) == 2:
-            z, jac = self.transformer(inputs, transform_params.reshape(inputs.shape[0], inputs.shape[1], -1))
+            z, jac = self.transformer(inputs, transform_params.reshape(
+                inputs.shape[0], inputs.shape[1], -1))
             log_det_jac = jac.log().sum(1)
             return z, log_det_jac
         else:
             B, C, H, W = inputs.shape
-            z, jac = self.transformer(inputs.permute(0, 2, 3, 1).reshape(-1, inputs.shape[1]), transform_params.permute(0, 2, 3, 1).reshape(-1, 1, transform_params.shape[1]))
+            z, jac = self.transformer(inputs.permute(0, 2, 3, 1).reshape(
+                -1, inputs.shape[1]), transform_params.permute(0, 2, 3, 1).reshape(-1, 1, transform_params.shape[1]))
             log_det_jac = jac.log().reshape(B, -1).sum(1)
             return z.reshape(B, H, W, C).permute(0, 3, 1, 2), log_det_jac
 
     def _coupling_transform_inverse(self, inputs, transform_params):
         if len(inputs.shape) == 2:
-            x = self.transformer.inverse_transform(inputs, transform_params.reshape(inputs.shape[0], inputs.shape[1], -1))
-            z, jac = self.transformer(x, transform_params.reshape(inputs.shape[0], inputs.shape[1], -1))
+            x = self.transformer.inverse_transform(
+                inputs, transform_params.reshape(inputs.shape[0], inputs.shape[1], -1))
+            z, jac = self.transformer(x, transform_params.reshape(
+                inputs.shape[0], inputs.shape[1], -1))
             log_det_jac = -jac.log().sum(1)
             return x, log_det_jac
         else:
             B, C, H, W = inputs.shape
-            x = self.transformer.inverse_transform(inputs.permute(0, 2, 3, 1).reshape(-1, inputs.shape[1]), transform_params.permute(0, 2, 3, 1).reshape(-1, 1, transform_params.shape[1]))
-            z, jac = self.transformer(x, transform_params.permute(0, 2, 3, 1).reshape(-1, 1, transform_params.shape[1]))
+            x = self.transformer.inverse_transform(inputs.permute(0, 2, 3, 1).reshape(
+                -1, inputs.shape[1]), transform_params.permute(0, 2, 3, 1).reshape(-1, 1, transform_params.shape[1]))
+            z, jac = self.transformer(x, transform_params.permute(
+                0, 2, 3, 1).reshape(-1, 1, transform_params.shape[1]))
             log_det_jac = -jac.log().reshape(B, -1).sum(1)
             return x.reshape(B, H, W, C).permute(0, 3, 1, 2), log_det_jac
 
@@ -221,8 +232,8 @@ class AffineCouplingTransform(CouplingTransform):
     `GENERAL_SCALE_ACTIVATION` produces scales <= 3, which is more useful in general applications.
     """
 
-    DEFAULT_SCALE_ACTIVATION = lambda x : torch.sigmoid(x + 2) + 1e-3
-    GENERAL_SCALE_ACTIVATION = lambda x : (softplus(x) + 1e-3).clamp(0, 3)
+    def DEFAULT_SCALE_ACTIVATION(x): return torch.sigmoid(x + 2) + 1e-3
+    def GENERAL_SCALE_ACTIVATION(x): return (softplus(x) + 1e-3).clamp(0, 3)
 
     def __init__(self, mask, transform_net_create_fn, unconditional_transform=None, scale_activation=DEFAULT_SCALE_ACTIVATION):
         self.scale_activation = scale_activation
@@ -232,7 +243,8 @@ class AffineCouplingTransform(CouplingTransform):
         return 2
 
     def _scale_and_shift(self, transform_params):
-        unconstrained_scale = transform_params[:, self.num_transform_features:, ...]
+        unconstrained_scale = transform_params[:,
+                                               self.num_transform_features:, ...]
         shift = transform_params[:, : self.num_transform_features, ...]
         scale = self.scale_activation(unconstrained_scale)
         return scale, shift
@@ -288,7 +300,8 @@ class PiecewiseCouplingTransform(CouplingTransform):
             # For 2D data, reshape transform_params from Bx(D*?) to BxDx?
             transform_params = transform_params.reshape(b, d, -1)
 
-        outputs, logabsdet = self._piecewise_cdf(inputs, transform_params, inverse)
+        outputs, logabsdet = self._piecewise_cdf(
+            inputs, transform_params, inverse)
 
         return outputs, torchutils.sum_except_batch(logabsdet)
 
@@ -317,7 +330,7 @@ class PiecewiseLinearCouplingTransform(PiecewiseCouplingTransform):
         self.tail_bound = tail_bound
 
         if apply_unconditional_transform:
-            unconditional_transform = lambda features: PiecewiseLinearCDF(
+            def unconditional_transform(features): return PiecewiseLinearCDF(
                 shape=[features] + (img_shape if img_shape else []),
                 num_bins=num_bins,
                 tails=tails,
@@ -377,7 +390,7 @@ class PiecewiseQuadraticCouplingTransform(PiecewiseCouplingTransform):
         self.min_bin_height = min_bin_height
 
         if apply_unconditional_transform:
-            unconditional_transform = lambda features: PiecewiseQuadraticCDF(
+            def unconditional_transform(features): return PiecewiseQuadraticCDF(
                 shape=[features] + (img_shape if img_shape else []),
                 num_bins=num_bins,
                 tails=tails,
@@ -402,7 +415,7 @@ class PiecewiseQuadraticCouplingTransform(PiecewiseCouplingTransform):
 
     def _piecewise_cdf(self, inputs, transform_params, inverse=False):
         unnormalized_widths = transform_params[..., : self.num_bins]
-        unnormalized_heights = transform_params[..., self.num_bins :]
+        unnormalized_heights = transform_params[..., self.num_bins:]
 
         if hasattr(self.transform_net, "hidden_features"):
             unnormalized_widths /= np.sqrt(self.transform_net.hidden_features)
@@ -413,7 +426,8 @@ class PiecewiseQuadraticCouplingTransform(PiecewiseCouplingTransform):
             spline_kwargs = {}
         else:
             spline_fn = splines.unconstrained_quadratic_spline
-            spline_kwargs = {"tails": self.tails, "tail_bound": self.tail_bound}
+            spline_kwargs = {"tails": self.tails,
+                             "tail_bound": self.tail_bound}
 
         return spline_fn(
             inputs=inputs,
@@ -447,7 +461,7 @@ class PiecewiseCubicCouplingTransform(PiecewiseCouplingTransform):
         self.tail_bound = tail_bound
 
         if apply_unconditional_transform:
-            unconditional_transform = lambda features: PiecewiseCubicCDF(
+            def unconditional_transform(features): return PiecewiseCubicCDF(
                 shape=[features] + (img_shape if img_shape else []),
                 num_bins=num_bins,
                 tails=tails,
@@ -469,8 +483,10 @@ class PiecewiseCubicCouplingTransform(PiecewiseCouplingTransform):
 
     def _piecewise_cdf(self, inputs, transform_params, inverse=False):
         unnormalized_widths = transform_params[..., : self.num_bins]
-        unnormalized_heights = transform_params[..., self.num_bins : 2 * self.num_bins]
-        unnorm_derivatives_left = transform_params[..., 2 * self.num_bins][..., None]
+        unnormalized_heights = transform_params[...,
+                                                self.num_bins: 2 * self.num_bins]
+        unnorm_derivatives_left = transform_params[...,
+                                                   2 * self.num_bins][..., None]
         unnorm_derivatives_right = transform_params[..., 2 * self.num_bins + 1][
             ..., None
         ]
@@ -484,7 +500,8 @@ class PiecewiseCubicCouplingTransform(PiecewiseCouplingTransform):
             spline_kwargs = {}
         else:
             spline_fn = splines.unconstrained_cubic_spline
-            spline_kwargs = {"tails": self.tails, "tail_bound": self.tail_bound}
+            spline_kwargs = {"tails": self.tails,
+                             "tail_bound": self.tail_bound}
 
         return spline_fn(
             inputs=inputs,
@@ -512,6 +529,7 @@ class PiecewiseRationalQuadraticCouplingTransform(PiecewiseCouplingTransform):
         min_bin_width=splines.rational_quadratic.DEFAULT_MIN_BIN_WIDTH,
         min_bin_height=splines.rational_quadratic.DEFAULT_MIN_BIN_HEIGHT,
         min_derivative=splines.rational_quadratic.DEFAULT_MIN_DERIVATIVE,
+        enable_identity_init=False,
     ):
 
         self.num_bins = num_bins
@@ -520,9 +538,10 @@ class PiecewiseRationalQuadraticCouplingTransform(PiecewiseCouplingTransform):
         self.min_derivative = min_derivative
         self.tails = tails
         self.tail_bound = tail_bound
+        self.enable_identity_init = enable_identity_init
 
         if apply_unconditional_transform:
-            unconditional_transform = lambda features: PiecewiseRationalQuadraticCDF(
+            def unconditional_transform(features): return PiecewiseRationalQuadraticCDF(
                 shape=[features] + (img_shape if img_shape else []),
                 num_bins=num_bins,
                 tails=tails,
@@ -530,6 +549,7 @@ class PiecewiseRationalQuadraticCouplingTransform(PiecewiseCouplingTransform):
                 min_bin_width=min_bin_width,
                 min_bin_height=min_bin_height,
                 min_derivative=min_derivative,
+                enable_identity_init=enable_identity_init
             )
         else:
             unconditional_transform = None
@@ -548,8 +568,9 @@ class PiecewiseRationalQuadraticCouplingTransform(PiecewiseCouplingTransform):
 
     def _piecewise_cdf(self, inputs, transform_params, inverse=False):
         unnormalized_widths = transform_params[..., : self.num_bins]
-        unnormalized_heights = transform_params[..., self.num_bins : 2 * self.num_bins]
-        unnormalized_derivatives = transform_params[..., 2 * self.num_bins :]
+        unnormalized_heights = transform_params[...,
+                                                self.num_bins: 2 * self.num_bins]
+        unnormalized_derivatives = transform_params[..., 2 * self.num_bins:]
 
         if hasattr(self.transform_net, "hidden_features"):
             unnormalized_widths /= np.sqrt(self.transform_net.hidden_features)
@@ -567,7 +588,8 @@ class PiecewiseRationalQuadraticCouplingTransform(PiecewiseCouplingTransform):
             spline_kwargs = {}
         else:
             spline_fn = splines.unconstrained_rational_quadratic_spline
-            spline_kwargs = {"tails": self.tails, "tail_bound": self.tail_bound}
+            spline_kwargs = {"tails": self.tails,
+                             "tail_bound": self.tail_bound}
 
         return spline_fn(
             inputs=inputs,
@@ -578,5 +600,6 @@ class PiecewiseRationalQuadraticCouplingTransform(PiecewiseCouplingTransform):
             min_bin_width=self.min_bin_width,
             min_bin_height=self.min_bin_height,
             min_derivative=self.min_derivative,
+            enable_identity_init=self.enable_identity_init,
             **spline_kwargs
         )

@@ -37,7 +37,8 @@ class AutoregressiveTransform(Transform):
 
     def forward(self, inputs, context=None):
         autoregressive_params = self.autoregressive_net(inputs, context)
-        outputs, logabsdet = self._elementwise_forward(inputs, autoregressive_params)
+        outputs, logabsdet = self._elementwise_forward(
+            inputs, autoregressive_params)
         return outputs, logabsdet
 
     def inverse(self, inputs, context=None):
@@ -142,6 +143,7 @@ class MaskedUMNNAutoregressiveTransform(AutoregressiveTransform):
         Leibniz rule for backward computation. CCParallel pass all the evaluation points (nb_steps) at once, it is faster
         but requires more memory.
         """
+
     def __init__(
         self,
         features,
@@ -174,23 +176,25 @@ class MaskedUMNNAutoregressiveTransform(AutoregressiveTransform):
         )
         self._epsilon = 1e-3
         super().__init__(made)
-        self.transformer = MonotonicNormalizer(integrand_net_layers, cond_size, nb_steps, solver)
-
+        self.transformer = MonotonicNormalizer(
+            integrand_net_layers, cond_size, nb_steps, solver)
 
     def _output_dim_multiplier(self):
         return self.cond_size
 
     def _elementwise_forward(self, inputs, autoregressive_params):
-        z, jac = self.transformer(inputs, autoregressive_params.reshape(inputs.shape[0], inputs.shape[1], -1))
+        z, jac = self.transformer(inputs, autoregressive_params.reshape(
+            inputs.shape[0], inputs.shape[1], -1))
         log_det_jac = jac.log().sum(1)
         return z, log_det_jac
 
     def _elementwise_inverse(self, inputs, autoregressive_params):
-        x = self.transformer.inverse_transform(inputs, autoregressive_params.reshape(inputs.shape[0], inputs.shape[1], -1))
-        z, jac = self.transformer(x, autoregressive_params.reshape(inputs.shape[0], inputs.shape[1], -1))
+        x = self.transformer.inverse_transform(
+            inputs, autoregressive_params.reshape(inputs.shape[0], inputs.shape[1], -1))
+        z, jac = self.transformer(x, autoregressive_params.reshape(
+            inputs.shape[0], inputs.shape[1], -1))
         log_det_jac = -jac.log().sum(1)
         return x, log_det_jac
-
 
 
 class MaskedPiecewiseLinearAutoregressiveTransform(AutoregressiveTransform):
@@ -300,10 +304,11 @@ class MaskedPiecewiseQuadraticAutoregressiveTransform(AutoregressiveTransform):
         )
 
         unnormalized_widths = transform_params[..., : self.num_bins]
-        unnormalized_heights = transform_params[..., self.num_bins :]
+        unnormalized_heights = transform_params[..., self.num_bins:]
 
         if hasattr(self.autoregressive_net, "hidden_features"):
-            unnormalized_widths /= np.sqrt(self.autoregressive_net.hidden_features)
+            unnormalized_widths /= np.sqrt(
+                self.autoregressive_net.hidden_features)
             # unnormalized_heights /= np.sqrt(self.autoregressive_net.hidden_features)
 
         if self.tails is None:
@@ -311,7 +316,8 @@ class MaskedPiecewiseQuadraticAutoregressiveTransform(AutoregressiveTransform):
             spline_kwargs = {}
         elif self.tails == "linear":
             spline_fn = unconstrained_quadratic_spline
-            spline_kwargs = {"tails": self.tails, "tail_bound": self.tail_bound}
+            spline_kwargs = {"tails": self.tails,
+                             "tail_bound": self.tail_bound}
         else:
             raise ValueError
 
@@ -375,14 +381,17 @@ class MaskedPiecewiseCubicAutoregressiveTransform(AutoregressiveTransform):
         )
 
         unnormalized_widths = transform_params[..., : self.num_bins]
-        unnormalized_heights = transform_params[..., self.num_bins : 2 * self.num_bins]
-        derivatives = transform_params[..., 2 * self.num_bins :]
+        unnormalized_heights = transform_params[...,
+                                                self.num_bins: 2 * self.num_bins]
+        derivatives = transform_params[..., 2 * self.num_bins:]
         unnorm_derivatives_left = derivatives[..., 0][..., None]
         unnorm_derivatives_right = derivatives[..., 1][..., None]
 
         if hasattr(self.autoregressive_net, "hidden_features"):
-            unnormalized_widths /= np.sqrt(self.autoregressive_net.hidden_features)
-            unnormalized_heights /= np.sqrt(self.autoregressive_net.hidden_features)
+            unnormalized_widths /= np.sqrt(
+                self.autoregressive_net.hidden_features)
+            unnormalized_heights /= np.sqrt(
+                self.autoregressive_net.hidden_features)
 
         outputs, logabsdet = cubic_spline(
             inputs=inputs,
@@ -419,6 +428,7 @@ class MaskedPiecewiseRationalQuadraticAutoregressiveTransform(AutoregressiveTran
         min_bin_width=rational_quadratic.DEFAULT_MIN_BIN_WIDTH,
         min_bin_height=rational_quadratic.DEFAULT_MIN_BIN_HEIGHT,
         min_derivative=rational_quadratic.DEFAULT_MIN_DERIVATIVE,
+        init_identity=False
     ):
         self.num_bins = num_bins
         self.min_bin_width = min_bin_width
@@ -440,6 +450,13 @@ class MaskedPiecewiseRationalQuadraticAutoregressiveTransform(AutoregressiveTran
             use_batch_norm=use_batch_norm,
         )
 
+        if init_identity:
+            torch.nn.init.constant_(autoregressive_net.final_layer.weight, 0.0)
+            torch.nn.init.constant_(
+                autoregressive_net.final_layer.bias,
+                np.log(np.exp(1 - min_derivative) - 1),
+            )
+
         super().__init__(autoregressive_net)
 
     def _output_dim_multiplier(self):
@@ -458,19 +475,23 @@ class MaskedPiecewiseRationalQuadraticAutoregressiveTransform(AutoregressiveTran
         )
 
         unnormalized_widths = transform_params[..., : self.num_bins]
-        unnormalized_heights = transform_params[..., self.num_bins : 2 * self.num_bins]
-        unnormalized_derivatives = transform_params[..., 2 * self.num_bins :]
+        unnormalized_heights = transform_params[...,
+                                                self.num_bins: 2 * self.num_bins]
+        unnormalized_derivatives = transform_params[..., 2 * self.num_bins:]
 
         if hasattr(self.autoregressive_net, "hidden_features"):
-            unnormalized_widths /= np.sqrt(self.autoregressive_net.hidden_features)
-            unnormalized_heights /= np.sqrt(self.autoregressive_net.hidden_features)
+            unnormalized_widths /= np.sqrt(
+                self.autoregressive_net.hidden_features)
+            unnormalized_heights /= np.sqrt(
+                self.autoregressive_net.hidden_features)
 
         if self.tails is None:
             spline_fn = rational_quadratic_spline
             spline_kwargs = {}
         elif self.tails == "linear":
             spline_fn = unconstrained_rational_quadratic_spline
-            spline_kwargs = {"tails": self.tails, "tail_bound": self.tail_bound}
+            spline_kwargs = {"tails": self.tails,
+                             "tail_bound": self.tail_bound}
         else:
             raise ValueError
 
