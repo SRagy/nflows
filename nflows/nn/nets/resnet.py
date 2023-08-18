@@ -48,7 +48,8 @@ class ResidualBlock(nn.Module):
         temps = self.dropout(temps)
         temps = self.linear_layers[1](temps)
         if context is not None:
-            temps = F.glu(torch.cat((temps, self.context_layer(context)), dim=1), dim=1)
+            temps = F.glu(
+                torch.cat((temps, self.context_layer(context)), dim=1), dim=1)
         return inputs + temps
 
 
@@ -65,11 +66,14 @@ class ResidualNet(nn.Module):
         activation=F.relu,
         dropout_probability=0.0,
         use_batch_norm=False,
+        ignore_context=False,
+        zero_initialisation=True
     ):
         super().__init__()
         self.hidden_features = hidden_features
         self.context_features = context_features
-        if context_features is not None:
+        self.ignore_context = ignore_context
+        if context_features is not None and not ignore_context:
             self.initial_layer = nn.Linear(
                 in_features + context_features, hidden_features
             )
@@ -126,7 +130,8 @@ class ConvResidualBlock(nn.Module):
                 [nn.BatchNorm2d(channels, eps=1e-3) for _ in range(2)]
             )
         self.conv_layers = nn.ModuleList(
-            [nn.Conv2d(channels, channels, kernel_size=3, padding=1) for _ in range(2)]
+            [nn.Conv2d(channels, channels, kernel_size=3, padding=1)
+             for _ in range(2)]
         )
         self.dropout = nn.Dropout(p=dropout_probability)
         if zero_initialization:
@@ -145,7 +150,8 @@ class ConvResidualBlock(nn.Module):
         temps = self.dropout(temps)
         temps = self.conv_layers[1](temps)
         if context is not None:
-            temps = F.glu(torch.cat((temps, self.context_layer(context)), dim=1), dim=1)
+            temps = F.glu(
+                torch.cat((temps, self.context_layer(context)), dim=1), dim=1)
         return inputs + temps
 
 
